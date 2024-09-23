@@ -30,9 +30,12 @@ export class CardsService {
 
             const body = await response.text();
 
-            const matchResult = this.findAnchorTagFromHtmlBody(body);
+            const hasSpamLinkInHtmlBody = this.checkSpamLinkDomain(
+              this.findLinkDomainsFromHtmlBody(body),
+              spamLinkDomains,
+            );
 
-            if (spamLinkDomains.includes(matchResult)) {
+            if (hasSpamLinkInHtmlBody) {
               return true;
             }
 
@@ -55,14 +58,30 @@ export class CardsService {
     return false;
   }
 
-  private findAnchorTagFromHtmlBody(html: string) {
-    const anchorTagRegex = /<a href="https:\/\/([^\/"]+)/;
-    const match = html.match(anchorTagRegex);
+  private findLinkDomainsFromHtmlBody(html: string): string[] {
+    const anchorTagRegex = /<a href="https:\/\/([^\/"]+)/g;
 
-    if (match) {
-      return match[1];
-    } else {
-      return null;
+    const matchResult = html.match(anchorTagRegex) || [];
+
+    const domains = matchResult.map((match: string) => {
+      const domain = match.split('https://')[1];
+
+      return domain;
+    });
+
+    return domains;
+  }
+
+  private checkSpamLinkDomain(
+    domains: string[],
+    spamLinkDomains: string[],
+  ): boolean {
+    for (const domain of domains) {
+      if (spamLinkDomains.includes(domain)) {
+        return true;
+      }
     }
+
+    return false;
   }
 }
