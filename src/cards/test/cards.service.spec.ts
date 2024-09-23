@@ -4,7 +4,11 @@ import { CardsService } from '../cards.service';
 describe('CardsService', () => {
   let service: CardsService;
 
-  const spamLinkDomains = ['www.naver.com', 'www.daum.net', 'www.google.com'];
+  const spamLinkDomains = [
+    'moimingg.page.link',
+    'github.com',
+    'docs.github.com',
+  ];
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -14,7 +18,53 @@ describe('CardsService', () => {
     service = module.get<CardsService>(CardsService);
   });
 
-  test('should return true if the content is spam', () => {
-    expect(service.isSpam('www.naver.com', spamLinkDomains, 1)).toBe(true);
+  test('케이스 1', async () => {
+    await expect(
+      service.isSpam(
+        'spam spam https://moiming.page.link/exam?_imcp=1',
+        [spamLinkDomains[2]],
+        1,
+      ),
+    ).resolves.toEqual(false);
+  });
+
+  test('케이스 2', async () => {
+    await expect(
+      service.isSpam(
+        'spam spam https://moiming.page.link/exam?_imcp=1',
+        [spamLinkDomains[0]],
+        1,
+      ),
+    ).resolves.toEqual(true);
+  });
+
+  test('케이스 3', async () => {
+    await expect(
+      service.isSpam(
+        'spam spam https://moiming.page.link/exam?_imcp=1',
+        [spamLinkDomains[1]],
+        2,
+      ),
+    ).resolves.toEqual(true);
+  });
+
+  test('케이스 4', async () => {
+    await expect(
+      service.isSpam(
+        'spam spam https://moiming.page.link/exam?_imcp=1',
+        [spamLinkDomains[2]],
+        2,
+      ),
+    ).resolves.toEqual(false);
+  });
+
+  test('케이스 5', async () => {
+    await expect(
+      service.isSpam(
+        'spam spam https://moiming.page.link/exam?_imcp=1',
+        [spamLinkDomains[2]],
+        3,
+      ),
+    ).resolves.toEqual(true);
   });
 });
