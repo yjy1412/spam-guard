@@ -59,7 +59,7 @@ export class CardsService {
   }
 
   private findLinkDomainsFromHtmlBody(html: string): string[] {
-    const anchorTagRegex = /<a href="https:\/\/([^\/"]+)/g;
+    const anchorTagRegex = /<a href="https:\/\/[^\/"]+/g;
 
     const matchResult = html.match(anchorTagRegex) || [];
 
