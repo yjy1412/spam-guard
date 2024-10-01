@@ -1,85 +1,142 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { Utils } from '../common/utils';
 
 @Injectable()
 export class CardsService {
+  private getDomainFromURL(url: string): string {
+    const { hostname } = new URL(url);
+
+    return hostname;
+  }
+
+  private async getLinkedURLsFromHTML(html: string): Promise<string[]> {
+    const hrefRegex: RegExp = /href="([^"]*)"/g;
+    const urls: string[] = Array.from(html.matchAll(hrefRegex)).map(
+      (match: RegExpMatchArray) => match[1],
+    );
+
+    return urls;
+  }
+
+  private async getURLsFromContent(content: string): Promise<string[]> {
+    const urlRegex: RegExp = /https?:\/\/[^\s]+/g;
+    const urls: string[] = content.match(urlRegex) || [];
+
+    return urls;
+  }
+
+  private async checkURLsSpamLinkDomainsIncluded(
+    urls: string[],
+    spamLinkDomains: string[],
+  ): Promise<void> {
+    if (urls.length === 0) {
+      return;
+    }
+
+    urls.forEach((url: string) => {
+      const domain = this.getDomainFromURL(url);
+
+      if (spamLinkDomains.includes(domain)) {
+        throw new BadRequestException('스팸 링크가 포함되어 있습니다.');
+      }
+    });
+  }
+
+  private async checkRedirectToSpamDomain(
+    response: Response,
+    spamLinkDomains: string[],
+  ): Promise<void> {
+    const redirectURL = response.headers.get('location');
+
+    if (redirectURL) {
+      const { hostname } = new URL(redirectURL);
+
+      if (spamLinkDomains.includes(hostname)) {
+        throw new BadRequestException('스팸 링크가 포함되어 있습니다.');
+      }
+    }
+  }
+
   async isSpam(
     content: string,
     spamLinkDomains: string[],
     redirectionDepth: number,
   ): Promise<boolean> {
-    const urlRegex = /https?:\/\/[^\s]+/g;
-    const urls = content.match(urlRegex) || [];
+    try {
+      const contentLinkedURLs = await this.getURLsFromContent(content);
 
-    for (const urlString of urls) {
-      let currentUrl = urlString;
-      let depth = 0;
-
-      while (depth <= redirectionDepth) {
-        try {
-          const response = await fetch(currentUrl, {
-            method: 'GET',
-            redirect: 'follow',
-          });
-
-          if (response.ok) {
-            const { hostname } = new URL(currentUrl);
-
-            if (spamLinkDomains.includes(hostname)) {
-              return true;
-            }
-
-            const body = await response.text();
-
-            const hasSpamLinkInHtmlBody = this.checkSpamLinkDomain(
-              this.findLinkDomainsFromHtmlBody(body),
-              spamLinkDomains,
-            );
-
-            if (hasSpamLinkInHtmlBody) {
-              return true;
-            }
-
-            break;
-          }
-
-          if (response.status === 301 || response.status === 302) {
-            currentUrl = response.headers.get('location') || currentUrl;
-            depth++;
-          } else {
-            break;
-          }
-        } catch (error) {
-          console.error('네트워크 에러', error);
-          break;
-        }
+      if (contentLinkedURLs.length === 0) {
+        return false;
       }
-    }
 
-    return false;
-  }
+      await this.checkURLsSpamLinkDomainsIncluded(
+        contentLinkedURLs,
+        spamLinkDomains,
+      );
 
-  private findLinkDomainsFromHtmlBody(html: string): string[] {
-    const anchorTagRegex = /<a href="https:\/\/[^\/"]+/g;
+      const batchSize = 10;
 
-    const matchResult = html.match(anchorTagRegex) || [];
+      await Utils.fetchInBatches<void>(
+        contentLinkedURLs,
+        batchSize,
+        async (url: string): Promise<void> => {
+          let currentURL = url;
+          let currentDepth = 0;
 
-    const domains = matchResult.map((match: string) => {
-      const domain = match.split('https://')[1];
+          while (currentDepth < redirectionDepth) {
+            if (currentURL === null) {
+              break;
+            }
 
-      return domain;
-    });
+            try {
+              const response = await Utils.fetchRedirectManual(currentURL);
 
-    return domains;
-  }
+              if (response.status === 301 || response.status === 302) {
+                await this.checkRedirectToSpamDomain(response, spamLinkDomains);
 
-  private checkSpamLinkDomain(
-    domains: string[],
-    spamLinkDomains: string[],
-  ): boolean {
-    for (const domain of domains) {
-      if (spamLinkDomains.includes(domain)) {
+                currentURL = response.headers.get('location') || null;
+                currentDepth += 1;
+                continue;
+              }
+
+              if (response.status === 200) {
+                const responseString: string = await response.text();
+                console.log('responseString', responseString);
+
+                await this.checkURLsSpamLinkDomainsIncluded(
+                  await this.getLinkedURLsFromHTML(responseString),
+                  spamLinkDomains,
+                );
+
+                break;
+              }
+
+              break;
+            } catch (error) {
+              if (error instanceof BadRequestException) {
+                throw error;
+              }
+
+              // NOTICE: 하나의 요청에서 에러가 발생하더라도, 스팸링크가 아니라면 다음 요청으로 넘어갑니다.
+              console.error(`Error Fetching URL(${currentURL})`, error);
+              break;
+            }
+          }
+        },
+      );
+    } catch (error) {
+      if (error instanceof BadRequestException) {
         return true;
       }
+
+      console.error('isSpam Error', error);
+      throw new InternalServerErrorException(
+        '스팸 여부를 확인하는 중에 에러가 발생했습니다.',
+      );
     }
 
     return false;
