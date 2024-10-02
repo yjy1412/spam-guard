@@ -20,6 +20,7 @@ describe('CardsService', () => {
   });
 
   afterEach(() => {
+    // NOTICE: spyOn을 초기화하려면, clearAllMocks 대신 restoreAllMocks를 사용해야 합니다.
     jest.restoreAllMocks();
   });
 

@@ -4,9 +4,10 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { Utils } from '../common/utils';
+import { CardsServiceInterface } from './interfaces/cards.service.interface';
 
 @Injectable()
-export class CardsService {
+export class CardsService implements CardsServiceInterface {
   private getDomainFromURL(url: string): string {
     const { hostname } = new URL(url);
 

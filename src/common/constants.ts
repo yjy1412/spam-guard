@@ -9,3 +9,9 @@ export enum FetchMethodEnum {
   CONNECT = 'CONNECT',
   TRACE = 'TRACE',
 }
+
+export const PROVIDE_TOKENS = {
+  SERVICE: {
+    CARDS_SERVICE: 'CardsService',
+  },
+};

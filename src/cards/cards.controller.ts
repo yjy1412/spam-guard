@@ -1,10 +1,14 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { CardsService } from './cards.service';
+import { Body, Controller, Inject, Post } from '@nestjs/common';
+import { CardsServiceInterface } from './interfaces';
 import { VerifyCardDto } from './dtos';
+import { PROVIDE_TOKENS } from '../common/constants';
 
 @Controller('app/cards')
 export class CardsController {
-  constructor(private readonly cardsService: CardsService) {}
+  constructor(
+    @Inject(PROVIDE_TOKENS.SERVICE.CARDS_SERVICE)
+    private readonly cardsService: CardsServiceInterface,
+  ) {}
 
   @Post('verify')
   async verifyCard(@Body() body: VerifyCardDto): Promise<boolean> {
